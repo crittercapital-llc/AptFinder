@@ -2,6 +2,8 @@
 
 > An AI-powered apartment-search agent that finds **neighborhoods** first, then the apartments inside them.
 
+**Live demo:** <https://aptfinder-homehound.vercel.app>
+
 HomeHound scrapes (or, in this MVP, mocks) listings, scores them against what
 matters to you — safety, commute, food, vibe, affordability, amenities, and
 landlord responsiveness — and drafts the first-touch outreach so you can stop
@@ -45,6 +47,14 @@ No external secrets are required — the workflow runs entirely on
 ubuntu-latest with Node 20.
 
 ## Deploying to Vercel
+
+The current production deployment lives at
+<https://aptfinder-homehound.vercel.app>.
+
+> **Note on PR previews:** automatic per-PR preview URLs still require
+> connecting the GitHub repo in the Vercel project settings (Option A below).
+> Without that link, the production URL above will not refresh on PRs and the
+> Vercel bot will not post preview checks.
 
 The repo includes a minimal `vercel.json` so Vercel auto-detects Next.js and
 builds with `npm ci && next build`. There are two ways to wire up previews —
