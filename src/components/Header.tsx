@@ -1,4 +1,4 @@
-export function Header() {
+export function Header({ shortlistCount = 0 }: { shortlistCount?: number }) {
   return (
     <header className="border-b border-ink-100 bg-white/70 backdrop-blur-md sticky top-0 z-30">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
@@ -16,6 +16,17 @@ export function Header() {
         <nav className="hidden items-center gap-1 md:flex">
           <a className="btn-ghost" href="#criteria" data-testid="nav-criteria">
             Criteria
+          </a>
+          <a className="btn-ghost" href="#shortlist" data-testid="nav-shortlist">
+            Shortlist
+            {shortlistCount > 0 && (
+              <span
+                className="ml-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-clay-100 px-1.5 text-[11px] font-semibold text-clay-700"
+                data-testid="shortlist-count"
+              >
+                {shortlistCount}
+              </span>
+            )}
           </a>
           <a className="btn-ghost" href="#neighborhoods" data-testid="nav-neighborhoods">
             Neighborhoods

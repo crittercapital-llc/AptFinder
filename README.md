@@ -30,6 +30,50 @@ npm run test
 npm run build
 ```
 
+## CI
+
+A GitHub Actions workflow at `.github/workflows/ci.yml` runs on every push to
+`main`/`feat/**`/`fix/**`/`chore/**` and on pull requests, and executes:
+
+1. `npm ci`
+2. `npm run typecheck`
+3. `npm run lint`
+4. `npm test`
+5. `npm run build`
+
+No external secrets are required — the workflow runs entirely on
+ubuntu-latest with Node 20.
+
+## Deploying to Vercel
+
+The repo includes a minimal `vercel.json` so Vercel auto-detects Next.js and
+builds with `npm ci && next build`. There are two ways to wire up previews —
+both require **external setup** (Vercel account + linking the repo) that
+cannot be done from inside this repo:
+
+**Option A — Vercel GitHub integration (recommended).**
+
+1. Sign in at <https://vercel.com> and click _Add New → Project_.
+2. Import the `crittercapital-llc/AptFinder` repo and grant Vercel access.
+3. Accept the auto-detected Next.js settings (build = `next build`,
+   output = `.next`, install = `npm ci`).
+4. Click _Deploy_. Every PR will then get a preview URL posted by the Vercel
+   bot as a check on the PR.
+
+**Option B — Vercel CLI from a developer machine.**
+
+```bash
+npm i -g vercel
+vercel login
+vercel link        # link this repo to a Vercel project
+vercel             # deploy a preview
+vercel --prod      # deploy production
+```
+
+There are no Vercel-only environment variables in this repo today (all data
+is mock and lives in `src/lib/data`). When real data sources land, add their
+keys via the Vercel dashboard or `vercel env add`.
+
 ## Code map
 
 ```
@@ -44,7 +88,8 @@ src/
     CriteriaForm.tsx         # full intake (budget, beds, neighborhoods, weights, outreach)
     NeighborhoodSection.tsx  # neighborhood-first card with matching listings beneath
     ListingCard.tsx          # listing + transparent score breakdown
-    OutreachPanel.tsx        # outreach drafts, status, next steps
+    OutreachPanel.tsx        # outreach drafts, copy-to-clipboard, regenerate, status
+    ShortlistPanel.tsx       # shortlist drawer with count, jump, filter-only toggle
     ScoreBar.tsx             # accessible 0..100 bar
   lib/
     types.ts                 # canonical domain shapes

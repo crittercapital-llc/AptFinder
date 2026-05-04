@@ -44,3 +44,7 @@ export const COMMUTE_DESTINATIONS = [
   "SoMa, SF",
   "Palo Alto, CA",
 ];
+
+// Cities the mock dataset actually covers. Used by the criteria form so users
+// don't type "Austin" and silently get SF results.
+export const SUPPORTED_CITIES = ["San Francisco", "Oakland"];

@@ -6,6 +6,7 @@ import {
   affordabilityScore,
   amenityScore,
   commuteScore,
+  normalizeBudget,
   normalizeWeights,
   rankNeighborhoods,
   scoreListing,
@@ -99,13 +100,28 @@ describe("commuteScore", () => {
     expect(score).toBeLessThan(60);
   });
 
-  it("returns zero for unreachable modes", () => {
+  it("returns zero for unreachable modes and marks as unavailable", () => {
     const n = findNeighborhood("rockridge")!;
-    const { score } = commuteScore(
+    const result = commuteScore(
       n,
       criteria({ commute: { destination: "Mission Bay, SF", maxMinutes: 30, mode: "walk" } }),
     );
-    expect(score).toBe(0);
+    expect(result.score).toBe(0);
+    expect(result.available).toBe(false);
+    expect(result.minutes).toBeNull();
+    expect(result.reason).toBe("unreachable_mode");
+  });
+
+  it("returns unavailable for a destination with no anchor", () => {
+    const n = findNeighborhood("mission")!;
+    const result = commuteScore(
+      n,
+      criteria({ commute: { destination: "Reykjavík", maxMinutes: 30, mode: "transit" } }),
+    );
+    expect(result.available).toBe(false);
+    expect(result.minutes).toBeNull();
+    expect(result.score).toBe(0);
+    expect(result.reason).toBe("missing_anchor");
   });
 });
 
@@ -141,6 +157,77 @@ describe("scoreListing", () => {
     const n = findNeighborhood(studio.neighborhoodId)!;
     const result = scoreListing(studio, n, criteria({ bedrooms: 1 }));
     expect(result.warnings.some((w) => w.toLowerCase().includes("studio"))).toBe(true);
+  });
+});
+
+describe("normalizeBudget", () => {
+  it("returns inputs as-is when valid", () => {
+    const b = normalizeBudget(criteria({ budgetMin: 2000, budgetMax: 3000 }));
+    expect(b).toEqual({ min: 2000, max: 3000, inverted: false, invalid: false });
+  });
+  it("swaps min and max when inverted", () => {
+    const b = normalizeBudget(criteria({ budgetMin: 4000, budgetMax: 2000 }));
+    expect(b.min).toBe(2000);
+    expect(b.max).toBe(4000);
+    expect(b.inverted).toBe(true);
+  });
+  it("flags invalid when a bound is NaN", () => {
+    const b = normalizeBudget(criteria({ budgetMin: NaN as unknown as number, budgetMax: 3000 }));
+    expect(b.invalid).toBe(true);
+  });
+});
+
+describe("scoreListing — robustness", () => {
+  it("survives inverted budgets and still scores affordability sensibly", () => {
+    const listing = LISTINGS[0]; // $3150
+    const n = findNeighborhood(listing.neighborhoodId)!;
+    const result = scoreListing(listing, n, criteria({ budgetMin: 5000, budgetMax: 2500 }));
+    expect(Number.isFinite(result.total)).toBe(true);
+    expect(result.total).toBeGreaterThanOrEqual(0);
+    expect(result.total).toBeLessThanOrEqual(100);
+  });
+
+  it("does not crash and warns when commute destination has no anchor", () => {
+    const listing = LISTINGS[0];
+    const n = findNeighborhood(listing.neighborhoodId)!;
+    const result = scoreListing(
+      listing,
+      n,
+      criteria({ commute: { destination: "Atlantis", maxMinutes: 30, mode: "transit" } }),
+    );
+    expect(result.warnings.some((w) => w.toLowerCase().includes("commute"))).toBe(true);
+  });
+
+  it("never surfaces the 999 internal sentinel in user-visible reasons or warnings", () => {
+    const listing = LISTINGS.find((l) => l.neighborhoodId === "rockridge")!;
+    const n = findNeighborhood("rockridge")!;
+    const result = scoreListing(
+      listing,
+      n,
+      criteria({ commute: { destination: "Mission Bay, SF", maxMinutes: 30, mode: "walk" } }),
+    );
+    const allText = [
+      ...result.warnings,
+      ...result.factors.map((f) => f.reason),
+      ...result.matchHighlights,
+    ].join(" | ");
+    expect(allText).not.toMatch(/999/);
+  });
+
+  it("total equals the sum of factor contributions (clamped 0..100)", () => {
+    const listing = LISTINGS[0];
+    const n = findNeighborhood(listing.neighborhoodId)!;
+    const result = scoreListing(listing, n, criteria());
+    const sum = result.factors.reduce((s, f) => s + f.contribution, 0);
+    const expected = Math.max(0, Math.min(100, sum));
+    expect(result.total).toBeCloseTo(expected, 5);
+  });
+
+  it("warns when the listing's available date is later than the user's move-in", () => {
+    const listing = LISTINGS.find((l) => l.id === "lst-005")!; // available 2026-07-01
+    const n = findNeighborhood(listing.neighborhoodId)!;
+    const result = scoreListing(listing, n, criteria({ moveInBy: "2026-06-01" }));
+    expect(result.warnings.some((w) => w.toLowerCase().includes("move-in"))).toBe(true);
   });
 });
 

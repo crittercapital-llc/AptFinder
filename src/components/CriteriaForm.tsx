@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { FactorKey, SearchCriteria } from "@/lib/types";
 import { FACTOR_LABELS } from "@/lib/scoring";
-import { AMENITY_OPTIONS, COMMUTE_DESTINATIONS } from "@/lib/defaults";
+import { AMENITY_OPTIONS, COMMUTE_DESTINATIONS, SUPPORTED_CITIES } from "@/lib/defaults";
 import { NEIGHBORHOODS } from "@/lib/data/neighborhoods";
 
 interface Props {
@@ -23,6 +23,8 @@ const FACTOR_HELP: Record<FactorKey, string> = {
 
 export function CriteriaForm({ value, onChange }: Props) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  const budgetError = computeBudgetError(value.budgetMin, value.budgetMax);
 
   function update<K extends keyof SearchCriteria>(k: K, v: SearchCriteria[K]) {
     onChange({ ...value, [k]: v });
@@ -71,13 +73,22 @@ export function CriteriaForm({ value, onChange }: Props) {
           <label className="field-label" htmlFor="city">
             City
           </label>
-          <input
+          <select
             id="city"
             data-testid="input-city"
             className="input mt-1"
-            value={value.city}
+            value={SUPPORTED_CITIES.includes(value.city) ? value.city : SUPPORTED_CITIES[0]}
             onChange={(e) => update("city", e.target.value)}
-          />
+          >
+            {SUPPORTED_CITIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-ink-500">
+            HomeHound currently indexes {SUPPORTED_CITIES.join(" and ")}. More cities coming soon.
+          </p>
         </div>
 
         <div>
@@ -106,6 +117,7 @@ export function CriteriaForm({ value, onChange }: Props) {
               value={value.budgetMin}
               onChange={(v) => update("budgetMin", v)}
               ariaLabel="Minimum monthly rent"
+              invalid={budgetError !== null}
             />
             <span className="text-ink-400">to</span>
             <CurrencyInput
@@ -113,9 +125,19 @@ export function CriteriaForm({ value, onChange }: Props) {
               value={value.budgetMax}
               onChange={(v) => update("budgetMax", v)}
               ariaLabel="Maximum monthly rent"
+              invalid={budgetError !== null}
             />
             <span className="text-sm text-ink-500">/ month</span>
           </div>
+          {budgetError && (
+            <p
+              className="mt-1 text-xs text-clay-700"
+              data-testid="budget-error"
+              role="alert"
+            >
+              {budgetError}
+            </p>
+          )}
         </div>
 
         <div>
@@ -373,11 +395,13 @@ function CurrencyInput({
   onChange,
   ariaLabel,
   testId,
+  invalid,
 }: {
   value: number;
   onChange: (n: number) => void;
   ariaLabel: string;
   testId: string;
+  invalid?: boolean;
 }) {
   return (
     <div className="relative flex-1">
@@ -389,11 +413,30 @@ function CurrencyInput({
         min={0}
         step={50}
         aria-label={ariaLabel}
+        aria-invalid={invalid || undefined}
         data-testid={testId}
-        className="input pl-7"
-        value={Number.isFinite(value) ? value : 0}
-        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        className={"input pl-7 " + (invalid ? "border-clay-400 focus:border-clay-500 focus:ring-clay-100" : "")}
+        value={Number.isFinite(value) ? value : ""}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (raw === "") {
+            onChange(NaN);
+            return;
+          }
+          const n = Number(raw);
+          onChange(Number.isFinite(n) ? n : NaN);
+        }}
       />
     </div>
   );
+}
+
+function computeBudgetError(min: number, max: number): string | null {
+  const minOk = Number.isFinite(min) && min >= 0;
+  const maxOk = Number.isFinite(max) && max >= 0;
+  if (!minOk && !maxOk) return "Enter both a min and a max budget.";
+  if (!minOk) return "Minimum budget is missing or invalid.";
+  if (!maxOk) return "Maximum budget is missing or invalid.";
+  if (min > max) return "Minimum budget is higher than the max — try swapping them.";
+  return null;
 }
