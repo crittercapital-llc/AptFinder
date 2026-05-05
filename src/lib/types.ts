@@ -56,6 +56,49 @@ export interface NeighborhoodScores {
   amenities: number;     // density of nearby amenities (cafes, parks, gyms)
 }
 
+// Approximate one-way travel time in minutes to a destination, broken out by
+// transport mode. `rail` and `bus` together explain the legacy `transit` field
+// (which we keep for back-compat with the listing-side scoring path). Use the
+// COMMUTE_UNREACHABLE sentinel for unreachable modes.
+export interface CommuteAnchor {
+  transit: number; // legacy: best-of rail/bus
+  rail: number;
+  bus: number;
+  walk: number;
+  bike: number;
+  drive: number;
+}
+
+// Static, hand-tuned neighborhood traits used by the discovery scoring. All
+// 0..100 unless noted. Designed to be replaceable with real data sources.
+export interface NeighborhoodTraits {
+  // Higher = louder. 0..100, where 0 is library-quiet, 100 is downtown nightlife strip.
+  noiseLevel: number;
+  // Density / quality of nearby parks and green space.
+  parkAccess: number;
+  // How well the area suits families with young kids (good schools, sidewalks, calm streets).
+  familyFriendliness: number;
+  // Density / variety of bars & restaurants.
+  nightlifeDensity: number;
+  // Cafe & "third place" density — distinct from food/nightlife.
+  cafeDensity: number;
+  // Fitness / outdoor access (gyms, trails, studios, biking).
+  fitnessAccess: number;
+  // Quiet walks: leafy streets, low car density, parks-y.
+  quietWalkability: number;
+  // Cultural activities: museums, theaters, music venues, galleries.
+  culturalDensity: number;
+  // Stability: neighborhoods that "stay good" for a long tenure (low turnover, mature housing stock).
+  longTermStability: number;
+  // Composition of the housing stock as approximate shares (0..1, do not need to sum to 1).
+  housingStock: {
+    largeBuildings: number;   // 50+ unit highrises
+    smallBuildings: number;   // 12-50 unit midrises
+    momAndPop: number;        // small owner-operated buildings
+    boutiqueVictorian: number; // boutique/Victorian/Edwardian character
+  };
+}
+
 export interface Neighborhood {
   id: string;
   name: string;
@@ -76,8 +119,10 @@ export interface Neighborhood {
   // Map placeholder coords for future map integration.
   lat: number;
   lng: number;
-  // Approximate transit time to common SF anchor (used by mock commute calc).
-  commuteAnchors: Record<string, { transit: number; walk: number; bike: number; drive: number }>;
+  // Approximate one-way commute by mode to common destinations.
+  commuteAnchors: Record<string, CommuteAnchor>;
+  // Discovery-flow traits — see NeighborhoodTraits.
+  traits: NeighborhoodTraits;
 }
 
 export interface Listing {
@@ -130,6 +175,83 @@ export interface ScoredNeighborhood {
   factors: ScoredFactor[];
   matchingListings: ScoredListing[];
   pitch: string; // 1-2 sentence agent-voice summary
+}
+
+// ---- Neighborhood discovery (questionnaire) ----
+
+// Modes the discovery flow exposes. "rail" and "bus" are split out from the
+// legacy "transit" so users can opt out of buses without losing rail.
+export type DiscoveryCommuteMode = "rail" | "bus" | "drive" | "bike" | "walk";
+
+export type NoisePreference = "quiet" | "balanced" | "lively";
+
+export type LifestyleInterest =
+  | "parks"
+  | "restaurants"
+  | "nightlife"
+  | "cafes"
+  | "fitness"
+  | "quiet_walks"
+  | "cultural";
+
+export type BuildingStyle =
+  | "large_buildings"
+  | "small_buildings"
+  | "mom_and_pop"
+  | "boutique_victorian";
+
+// Final answers from the discovery questionnaire. All fields have a default
+// applied at form-init time, so the scoring function can assume well-formed
+// data. Unknown destination/mode degrades gracefully in scoring.
+export interface DiscoveryAnswers {
+  // Step 1 — commute
+  commuteDestination: string;
+  commuteMaxMinutes: number;
+  // Modes the user is willing to use. At least one is required by the form;
+  // scoring still degrades gracefully if the array is empty.
+  commuteModes: DiscoveryCommuteMode[];
+
+  // Step 2 — lifestyle
+  lifestyle: LifestyleInterest[];
+  noise: NoisePreference;
+  // Whether bars/restaurants matter — separate from `lifestyle` so users can
+  // opt in even if they didn't pick "nightlife" / "restaurants" explicitly.
+  wantsNightlifeNearby: boolean;
+  wantsParksNearby: boolean;
+
+  // Step 3 — life situation
+  hasYoungKids: boolean;
+  yearsPlanned: number;
+
+  // Step 4 — housing preferences
+  buildingStyles: BuildingStyle[];
+}
+
+// Per-neighborhood explanation produced by the discovery scorer. Reasons are
+// short, agent-voice bullets the UI can render verbatim.
+export interface DiscoveryReason {
+  key: string;     // stable id for testing (e.g. "commute", "noise")
+  positive: boolean;
+  text: string;
+}
+
+export interface DiscoveryRecommendation {
+  neighborhood: Neighborhood;
+  total: number;            // 0..100
+  commuteMinutes: number | null;
+  commuteMode: DiscoveryCommuteMode | null; // best mode actually used
+  reasons: DiscoveryReason[];
+  // Sub-scores for transparency / future tuning.
+  components: {
+    commute: number;
+    lifestyle: number;
+    noise: number;
+    family: number;
+    nightlife: number;
+    parks: number;
+    tenure: number;
+    housing: number;
+  };
 }
 
 export interface OutreachAction {

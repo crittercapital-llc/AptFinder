@@ -2,19 +2,40 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CriteriaForm } from "@/components/CriteriaForm";
+import { DiscoveryWizard } from "@/components/DiscoveryWizard";
 import { Header } from "@/components/Header";
 import { Hero } from "@/components/Hero";
+import { NeighborhoodRecommendations } from "@/components/NeighborhoodRecommendations";
 import { NeighborhoodSection } from "@/components/NeighborhoodSection";
 import { OutreachPanel } from "@/components/OutreachPanel";
 import { ShortlistPanel } from "@/components/ShortlistPanel";
 import { LISTINGS } from "@/lib/data/listings";
 import { NEIGHBORHOODS } from "@/lib/data/neighborhoods";
 import { DEFAULT_CRITERIA } from "@/lib/defaults";
+import {
+  DEFAULT_DISCOVERY_ANSWERS,
+  discoveryCommuteToLegacyMode,
+  rankNeighborhoodsForDiscovery,
+} from "@/lib/discovery";
 import { generateOutreach, newOutreachAction } from "@/lib/outreach";
 import { rankNeighborhoods } from "@/lib/scoring";
-import type { OutreachAction, SearchCriteria } from "@/lib/types";
+import type {
+  DiscoveryAnswers,
+  OutreachAction,
+  SearchCriteria,
+} from "@/lib/types";
+
+type Phase = "discovery" | "review" | "results";
 
 export default function HomePage() {
+  const [phase, setPhase] = useState<Phase>("discovery");
+  const [discoveryAnswers, setDiscoveryAnswers] = useState<DiscoveryAnswers>(
+    DEFAULT_DISCOVERY_ANSWERS,
+  );
+  const [acceptedNeighborhoods, setAcceptedNeighborhoods] = useState<Set<string>>(
+    new Set(),
+  );
+
   const [criteria, setCriteria] = useState<SearchCriteria>(DEFAULT_CRITERIA);
   const [passed, setPassed] = useState<Set<string>>(new Set());
   const [shortlist, setShortlist] = useState<Set<string>>(new Set());
@@ -22,11 +43,29 @@ export default function HomePage() {
   const [outreach, setOutreach] = useState<Record<string, OutreachAction>>({});
   const [shortlistOnly, setShortlistOnly] = useState(false);
 
+  const recommendations = useMemo(
+    () => rankNeighborhoodsForDiscovery(NEIGHBORHOODS, discoveryAnswers),
+    [discoveryAnswers],
+  );
+
+  // Listings restricted to neighborhoods the user accepted in discovery.
+  const acceptedListings = useMemo(() => {
+    if (acceptedNeighborhoods.size === 0) return LISTINGS;
+    return LISTINGS.filter((l) => acceptedNeighborhoods.has(l.neighborhoodId));
+  }, [acceptedNeighborhoods]);
+
+  // Neighborhoods restricted to the accepted set so the listing-side ranking
+  // doesn't surface places the user already declined.
+  const acceptedNeighborhoodObjs = useMemo(() => {
+    if (acceptedNeighborhoods.size === 0) return NEIGHBORHOODS;
+    return NEIGHBORHOODS.filter((n) => acceptedNeighborhoods.has(n.id));
+  }, [acceptedNeighborhoods]);
+
   const ranked = useMemo(() => {
-    let visible = LISTINGS.filter((l) => !passed.has(l.id));
+    let visible = acceptedListings.filter((l) => !passed.has(l.id));
     if (shortlistOnly) visible = visible.filter((l) => shortlist.has(l.id));
-    return rankNeighborhoods(NEIGHBORHOODS, visible, criteria);
-  }, [criteria, passed, shortlist, shortlistOnly]);
+    return rankNeighborhoods(acceptedNeighborhoodObjs, visible, criteria);
+  }, [acceptedListings, acceptedNeighborhoodObjs, criteria, passed, shortlist, shortlistOnly]);
 
   const listingsById = useMemo(
     () => Object.fromEntries(LISTINGS.map((l) => [l.id, l])),
@@ -54,6 +93,7 @@ export default function HomePage() {
   // that don't yet have outreach (and that haven't been passed). Capped to a
   // small number so we don't fire 12 drafts on first load.
   useEffect(() => {
+    if (phase !== "results") return;
     if (!criteria.outreach.autoDraft) return;
     const candidates: string[] = [];
     for (const n of ranked) {
@@ -77,9 +117,79 @@ export default function HomePage() {
       }
       return next;
     });
-    // We intentionally re-run when ranked/passed/autoDraft toggle changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [criteria.outreach.autoDraft, ranked, passed]);
+  }, [phase, criteria.outreach.autoDraft, ranked, passed]);
+
+  function handleDiscoverySubmit(answers: DiscoveryAnswers) {
+    setDiscoveryAnswers(answers);
+    // Sync the listing-side criteria so commute scoring and listing filters
+    // reflect the discovery answers. The user can still tweak in CriteriaForm.
+    setCriteria((c) => ({
+      ...c,
+      commute: {
+        destination: answers.commuteDestination,
+        maxMinutes: answers.commuteMaxMinutes,
+        mode: discoveryCommuteToLegacyMode(answers.commuteModes),
+      },
+    }));
+    // Pre-select the top 3 recommendations for the user's review step.
+    const ranked = rankNeighborhoodsForDiscovery(NEIGHBORHOODS, answers);
+    setAcceptedNeighborhoods(new Set(ranked.slice(0, 3).map((r) => r.neighborhood.id)));
+    setPhase("review");
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        document.getElementById("recommendations")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }
+
+  function toggleAcceptNeighborhood(id: string) {
+    setAcceptedNeighborhoods((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function acceptTopRecommendations() {
+    const top = recommendations.slice(0, 5).map((r) => r.neighborhood.id);
+    setAcceptedNeighborhoods(new Set(top));
+  }
+
+  function confirmRecommendations() {
+    if (acceptedNeighborhoods.size === 0) return;
+    // Push the accepted neighborhoods into preferredNeighborhoods so the
+    // listing-side scoring also boosts them.
+    setCriteria((c) => ({
+      ...c,
+      preferredNeighborhoods: Array.from(acceptedNeighborhoods),
+    }));
+    setPhase("results");
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        document.getElementById("neighborhoods")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }
+
+  function backToDiscovery() {
+    setPhase("discovery");
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        document.getElementById("discovery")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }
+
+  function backToReview() {
+    setPhase("review");
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        document.getElementById("recommendations")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }
 
   function passListing(listingId: string) {
     setPassed((s) => {
@@ -87,8 +197,6 @@ export default function HomePage() {
       next.add(listingId);
       return next;
     });
-    // Note: we no longer delete the outreach draft on pass — passing hides
-    // the listing from results but preserves any draft work in the panel.
   }
 
   function toggleShortlist(listingId: string) {
@@ -142,73 +250,131 @@ export default function HomePage() {
       <Hero neighborhoodCount={NEIGHBORHOODS.length} listingCount={LISTINGS.length} />
 
       <div className="mx-auto max-w-7xl px-6 pb-24">
-        <div className="mt-2">
-          <CriteriaForm value={criteria} onChange={setCriteria} />
-        </div>
+        {phase === "discovery" && (
+          <div className="mt-2">
+            <DiscoveryWizard
+              initial={discoveryAnswers}
+              onSubmit={handleDiscoverySubmit}
+            />
+          </div>
+        )}
 
-        <section className="mt-10">
-          <ShortlistPanel
-            shortlist={shortlist}
-            listingsById={listingsById}
-            shortlistOnly={shortlistOnly}
-            onToggleFilter={() => setShortlistOnly((v) => !v)}
-            onJump={jumpToListing}
-            onRemove={(id) => toggleShortlist(id)}
-          />
-        </section>
+        {phase === "review" && (
+          <div className="mt-2">
+            <NeighborhoodRecommendations
+              recommendations={recommendations}
+              selected={acceptedNeighborhoods}
+              onToggle={toggleAcceptNeighborhood}
+              onAcceptAll={acceptTopRecommendations}
+              onConfirm={confirmRecommendations}
+              onEdit={backToDiscovery}
+            />
+          </div>
+        )}
 
-        <section id="neighborhoods" className="mt-10">
-          <div className="mb-6 flex flex-wrap items-baseline justify-between gap-3">
-            <div>
-              <div className="section-eyebrow">Neighborhood-first results</div>
-              <h2 className="font-display text-3xl font-semibold tracking-tight text-ink-900">
-                {ranked.length} neighborhoods, ranked for you
-              </h2>
-              <p className="mt-1 text-sm text-ink-600">
-                {shortlistOnly
-                  ? `${totalMatches} shortlisted listing${totalMatches === 1 ? "" : "s"} shown.`
-                  : `${totalMatches} active listings sorted into the places we'd actually recommend you live.`}
-              </p>
+        {phase === "results" && (
+          <>
+            <div
+              className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-xl2 border border-moss-200 bg-moss-50 px-5 py-4 text-sm text-moss-900"
+              data-testid="results-banner"
+            >
+              <div>
+                <div className="section-eyebrow text-moss-700">Searching apartments in</div>
+                <div className="mt-0.5 font-display text-lg font-semibold">
+                  {Array.from(acceptedNeighborhoods)
+                    .map((id) => NEIGHBORHOODS.find((n) => n.id === id)?.name ?? id)
+                    .join(" · ")}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={backToReview}
+                  data-testid="results-edit-neighborhoods"
+                >
+                  Adjust neighborhoods
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={backToDiscovery}
+                  data-testid="results-edit-discovery"
+                >
+                  Restart questionnaire
+                </button>
+              </div>
             </div>
-            {passed.size > 0 && (
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setPassed(new Set())}
-                data-testid="restore-passed"
-              >
-                Restore {passed.size} passed listing{passed.size === 1 ? "" : "s"}
-              </button>
-            )}
-          </div>
 
-          <div className="space-y-8" data-testid="neighborhood-list">
-            {ranked.map((n, idx) => (
-              <NeighborhoodSection
-                key={n.neighborhood.id}
-                scored={n}
-                rank={idx + 1}
-                outreach={outreach}
+            <div className="mt-6">
+              <CriteriaForm value={criteria} onChange={setCriteria} />
+            </div>
+
+            <section className="mt-10">
+              <ShortlistPanel
                 shortlist={shortlist}
-                onStartOutreach={startOutreach}
-                onPass={passListing}
-                onShortlist={toggleShortlist}
+                listingsById={listingsById}
+                shortlistOnly={shortlistOnly}
+                onToggleFilter={() => setShortlistOnly((v) => !v)}
+                onJump={jumpToListing}
+                onRemove={(id) => toggleShortlist(id)}
               />
-            ))}
-          </div>
-        </section>
+            </section>
 
-        <section className="mt-12">
-          <OutreachPanel
-            outreach={outreach}
-            listingsById={listingsById}
-            onUpdate={updateOutreach}
-            onAdvance={advanceOutreach}
-            onRemove={removeOutreach}
-            onRegenerate={regenerateOutreach}
-            tone={criteria.outreach.tone}
-          />
-        </section>
+            <section id="neighborhoods" className="mt-10">
+              <div className="mb-6 flex flex-wrap items-baseline justify-between gap-3">
+                <div>
+                  <div className="section-eyebrow">Neighborhood-first results</div>
+                  <h2 className="font-display text-3xl font-semibold tracking-tight text-ink-900">
+                    {ranked.length} accepted neighborhood{ranked.length === 1 ? "" : "s"}, ranked for you
+                  </h2>
+                  <p className="mt-1 text-sm text-ink-600">
+                    {shortlistOnly
+                      ? `${totalMatches} shortlisted listing${totalMatches === 1 ? "" : "s"} shown.`
+                      : `${totalMatches} active listings inside the neighborhoods you accepted.`}
+                  </p>
+                </div>
+                {passed.size > 0 && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setPassed(new Set())}
+                    data-testid="restore-passed"
+                  >
+                    Restore {passed.size} passed listing{passed.size === 1 ? "" : "s"}
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-8" data-testid="neighborhood-list">
+                {ranked.map((n, idx) => (
+                  <NeighborhoodSection
+                    key={n.neighborhood.id}
+                    scored={n}
+                    rank={idx + 1}
+                    outreach={outreach}
+                    shortlist={shortlist}
+                    onStartOutreach={startOutreach}
+                    onPass={passListing}
+                    onShortlist={toggleShortlist}
+                  />
+                ))}
+              </div>
+            </section>
+
+            <section className="mt-12">
+              <OutreachPanel
+                outreach={outreach}
+                listingsById={listingsById}
+                onUpdate={updateOutreach}
+                onAdvance={advanceOutreach}
+                onRemove={removeOutreach}
+                onRegenerate={regenerateOutreach}
+                tone={criteria.outreach.tone}
+              />
+            </section>
+          </>
+        )}
 
         <footer className="mt-16 border-t border-ink-100 pt-8 text-sm text-ink-500">
           <div className="flex flex-wrap items-center justify-between gap-3">
