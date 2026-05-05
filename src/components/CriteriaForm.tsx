@@ -362,10 +362,32 @@ export function CriteriaForm({ value, onChange }: Props) {
                     update("outreach", { ...value.outreach, tone: e.target.value as SearchCriteria["outreach"]["tone"] })
                   }
                 >
-                  <option value="warm">Warm</option>
-                  <option value="concise">Concise</option>
-                  <option value="formal">Formal</option>
+                  <option value="warm">Warm — friendly and personable</option>
+                  <option value="casual">Casual — relaxed and conversational</option>
+                  <option value="concise">Concise — short and to the point</option>
+                  <option value="enthusiastic">Enthusiastic — excited and expressive</option>
+                  <option value="formal">Formal — professional and polished</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="field-label" htmlFor="outreach-about">
+                  About me
+                </label>
+                <p className="mt-0.5 text-xs text-ink-500">
+                  A short bio HomeHound will weave into your outreach drafts to help you stand out.
+                </p>
+                <textarea
+                  id="outreach-about"
+                  className="input mt-1 min-h-[80px] resize-y"
+                  data-testid="outreach-about"
+                  rows={3}
+                  placeholder="e.g. Software engineer moving from Seattle. I keep a tidy space, WFH a few days a week, and have a well-behaved dog."
+                  value={value.outreach.aboutMe}
+                  onChange={(e) =>
+                    update("outreach", { ...value.outreach, aboutMe: e.target.value })
+                  }
+                />
               </div>
 
               <div>
