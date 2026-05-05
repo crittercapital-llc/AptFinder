@@ -54,11 +54,7 @@ export function generateOutreach(
     ? `I'd be commuting to ${criteria.commute.destination} (${criteria.commute.mode}), so the location is a real fit.`
     : "";
 
-  const aboutMeLine = aboutMe
-    ? tone === "formal"
-      ? `About me: ${aboutMe}`
-      : `A little about me: ${aboutMe}`
-    : "";
+  const aboutMeLine = aboutMe ? formatAboutMe(aboutMe, tone) : "";
 
   const closing =
     tone === "formal"
@@ -89,6 +85,110 @@ export function generateOutreach(
     .join("\n");
 
   return { subject, body };
+}
+
+function formatAboutMe(bio: string, tone: SearchCriteria["outreach"]["tone"]): string {
+  const transformed = applyToneTransform(bio.trim(), tone);
+
+  switch (tone) {
+    case "formal":
+      return (
+        `I would also like to briefly introduce myself. ${transformed} ` +
+        `I take great care of every property I have resided in and would welcome the opportunity to demonstrate that.`
+      );
+    case "casual":
+      return (
+        `Quick bit about me — ${lcFirst(transformed)} ` +
+        `Easy-going tenant and I always pay on time.`
+      );
+    case "concise":
+      return `A bit about me: ${transformed}`;
+    case "enthusiastic":
+      return (
+        `I'd also love to share a little about myself — ${lcFirst(transformed)} ` +
+        `I genuinely love taking care of a space and would be so thrilled to call your building home!`
+      );
+    default: // warm
+      return (
+        `I'd also love to share a little about myself — ${lcFirst(transformed)} ` +
+        `I take good care of every place I've lived and would love to find somewhere I can really settle in.`
+      );
+  }
+}
+
+function applyToneTransform(text: string, tone: SearchCriteria["outreach"]["tone"]): string {
+  if (tone === "formal") {
+    return expandContractions(text)
+      .replace(/\bmoving\b/gi, "relocating")
+      .replace(/\bpretty\b/gi, "quite")
+      .replace(/\bkids\b/gi, "children")
+      .replace(/\blots of\b/gi, "a great deal of")
+      .replace(/\bpup\b/gi, "dog");
+  }
+  if (tone === "casual") {
+    return compressContractions(text)
+      .replace(/\brelocating\b/gi, "moving")
+      .replace(/\bI am currently\b/gi, "I'm currently")
+      .replace(/\bwork from home\b/gi, "WFH")
+      .replace(/\bwell-behaved dog\b/gi, "well-behaved pup");
+  }
+  if (tone === "concise") {
+    return compressContractions(text)
+      .replace(/\bwork from home\b/gi, "WFH")
+      .replace(/\ba few days a week\b/gi, "part-time")
+      .replace(/\bvery\b/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+  if (tone === "enthusiastic") {
+    return compressContractions(text)
+      .replace(/\bgood\b/gi, "great")
+      .replace(/\bnice\b/gi, "wonderful")
+      .replace(/\bclean\b/gi, "very tidy")
+      .replace(/\btidy\b/gi, "very tidy");
+  }
+  // warm — keep natural, just compress contractions
+  return compressContractions(text);
+}
+
+function expandContractions(t: string): string {
+  return t
+    .replace(/\bI'm\b/g, "I am")
+    .replace(/\bI've\b/g, "I have")
+    .replace(/\bI'd\b/g, "I would")
+    .replace(/\bI'll\b/g, "I will")
+    .replace(/\bdon't\b/g, "do not")
+    .replace(/\bcan't\b/g, "cannot")
+    .replace(/\bwon't\b/g, "will not")
+    .replace(/\bisn't\b/g, "is not")
+    .replace(/\baren't\b/g, "are not")
+    .replace(/\bdidn't\b/g, "did not")
+    .replace(/\bdoesn't\b/g, "does not")
+    .replace(/\bhadn't\b/g, "had not")
+    .replace(/\bhasn't\b/g, "has not")
+    .replace(/\bhaven't\b/g, "have not")
+    .replace(/\bit's\b/g, "it is")
+    .replace(/\bthey're\b/g, "they are")
+    .replace(/\byou're\b/g, "you are")
+    .replace(/\bwe're\b/g, "we are");
+}
+
+function compressContractions(t: string): string {
+  return t
+    .replace(/\bI am\b/g, "I'm")
+    .replace(/\bI have\b/g, "I've")
+    .replace(/\bI would\b/g, "I'd")
+    .replace(/\bI will\b/g, "I'll")
+    .replace(/\bdo not\b/g, "don't")
+    .replace(/\bcannot\b/g, "can't")
+    .replace(/\bwill not\b/g, "won't")
+    .replace(/\bit is\b/g, "it's");
+}
+
+function lcFirst(s: string): string {
+  // Don't lowercase the pronoun "I" at the start of a sentence.
+  if (/^I[ ,'.]/.test(s)) return s;
+  return s.charAt(0).toLowerCase() + s.slice(1);
 }
 
 function bedroomPhrase(b: number) {
