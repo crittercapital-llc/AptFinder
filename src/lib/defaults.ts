@@ -21,6 +21,8 @@ export const DEFAULT_CRITERIA: SearchCriteria = {
     autoDraft: true,
     tone: "warm",
     introLine: "— Alex, software engineer relocating from Seattle",
+    aboutMe:
+      "I'm a software engineer relocating from Seattle. I keep a tidy space, work from home a few days a week, and have a small, well-behaved dog.",
   },
 };
 

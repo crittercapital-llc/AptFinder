@@ -41,8 +41,9 @@ export interface SearchCriteria {
   weights: Record<FactorKey, number>;
   outreach: {
     autoDraft: boolean;
-    tone: "warm" | "concise" | "formal";
+    tone: "warm" | "concise" | "formal" | "casual" | "enthusiastic";
     introLine: string;       // user signature / context
+    aboutMe: string;         // short bio injected into outreach drafts
   };
 }
 
