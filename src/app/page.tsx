@@ -378,9 +378,10 @@ export default function HomePage() {
 
         <footer className="mt-16 border-t border-ink-100 pt-8 text-sm text-ink-500">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              HomeHound MVP · listings &amp; neighborhoods are mock data, swap in real
-              scrapers via{" "}
+            <div data-testid="footer-data-source">
+              HomeHound MVP · listings &amp; neighborhoods are <strong>local mock data</strong>{" "}
+              — this app does <strong>not</strong> pull from Zillow or any other
+              live listing source. Swap in real scrapers via{" "}
               <code className="rounded bg-ink-100 px-1.5 py-0.5 font-mono text-xs">
                 src/lib/data
               </code>

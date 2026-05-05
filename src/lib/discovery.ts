@@ -15,7 +15,7 @@ export const DEFAULT_DISCOVERY_ANSWERS: DiscoveryAnswers = {
   commuteDestination: "Mission Bay, SF",
   commuteMaxMinutes: 35,
   commuteModes: ["rail", "drive", "bike", "walk"], // bus excluded by default — easy to re-enable
-  lifestyle: ["restaurants", "cafes", "parks"],
+  lifestyle: ["restaurants", "cafes", "greenspaces"],
   noise: "balanced",
   wantsNightlifeNearby: true,
   wantsParksNearby: true,
@@ -33,7 +33,7 @@ export const COMMUTE_MODE_LABELS: Record<DiscoveryCommuteMode, string> = {
 };
 
 export const LIFESTYLE_LABELS: Record<LifestyleInterest, string> = {
-  parks: "Sit in parks",
+  greenspaces: "Hang in Greenspaces",
   restaurants: "Restaurants",
   nightlife: "Bars & nightlife",
   cafes: "Cafés",
@@ -139,7 +139,7 @@ function lifestyleScore(neighborhood: Neighborhood, interests: LifestyleInterest
   if (interests.length === 0) return 70;
   const t = neighborhood.traits;
   const map: Record<LifestyleInterest, number> = {
-    parks: t.parkAccess,
+    greenspaces: t.parkAccess,
     restaurants: neighborhood.scores.food,
     nightlife: t.nightlifeDensity,
     cafes: t.cafeDensity,

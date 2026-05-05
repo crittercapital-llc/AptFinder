@@ -3,6 +3,7 @@ import { LISTINGS } from "@/lib/data/listings";
 import { NEIGHBORHOODS, findNeighborhood } from "@/lib/data/neighborhoods";
 import {
   DEFAULT_DISCOVERY_ANSWERS,
+  LIFESTYLE_LABELS,
   discoveryCommuteToLegacyMode,
   pickBestCommute,
   rankNeighborhoodsForDiscovery,
@@ -211,7 +212,7 @@ describe("rankNeighborhoodsForDiscovery", () => {
         noise: "quiet",
         wantsNightlifeNearby: false,
         wantsParksNearby: true,
-        lifestyle: ["parks", "quiet_walks"],
+        lifestyle: ["greenspaces", "quiet_walks"],
       }),
     );
     const singles = rankNeighborhoodsForDiscovery(
@@ -248,6 +249,105 @@ describe("listing filtering by accepted neighborhoods", () => {
 
   it("returns all listings when no accepted set is provided", () => {
     expect(filteredListings(new Set()).length).toBe(LISTINGS.length);
+  });
+});
+
+describe("expanded SF neighborhood catalog", () => {
+  const REQUIRED_SF_IDS = [
+    "pacific-heights",
+    "russian-hill",
+    "nob-hill",
+    "north-beach",
+    "marina",
+    "cow-hollow",
+    "hayes-valley",
+    "noe-valley",
+    "duboce-triangle",
+    "lower-haight",
+    "inner-richmond",
+    "inner-sunset",
+    "cole-valley",
+    "potrero-hill",
+    "dogpatch",
+    "bernal-heights",
+    "glen-park",
+    "castro",
+    "mission",
+    "soma",
+    "mission-bay",
+    "presidio-heights",
+    "laurel-heights",
+    "japantown",
+  ];
+
+  it("includes all the SF neighborhoods called out for the catalog", () => {
+    for (const id of REQUIRED_SF_IDS) {
+      expect(findNeighborhood(id), `missing neighborhood ${id}`).toBeDefined();
+    }
+  });
+
+  it("has unique ids (no duplicates)", () => {
+    const ids = NEIGHBORHOODS.map((n) => n.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("every neighborhood has commute anchors for all configured destinations", () => {
+    const destinations = ["Mission Bay, SF", "Financial District, SF", "SoMa, SF", "Palo Alto, CA"];
+    for (const n of NEIGHBORHOODS) {
+      for (const d of destinations) {
+        expect(
+          n.commuteAnchors[d],
+          `${n.id} missing anchor for ${d}`,
+        ).toBeDefined();
+      }
+    }
+  });
+
+  it("scores Pacific Heights and Russian Hill against default answers and surfaces both as recommendations", () => {
+    const ranked = rankNeighborhoodsForDiscovery(NEIGHBORHOODS, DEFAULT_DISCOVERY_ANSWERS);
+    const pacheights = ranked.find((r) => r.neighborhood.id === "pacific-heights");
+    const russianhill = ranked.find((r) => r.neighborhood.id === "russian-hill");
+    expect(pacheights, "Pacific Heights should be in ranked output").toBeDefined();
+    expect(russianhill, "Russian Hill should be in ranked output").toBeDefined();
+    expect(pacheights!.total).toBeGreaterThan(0);
+    expect(russianhill!.total).toBeGreaterThan(0);
+    expect(pacheights!.reasons.length).toBeGreaterThan(0);
+    expect(russianhill!.reasons.length).toBeGreaterThan(0);
+  });
+
+  it("Pacific Heights and Russian Hill have at least one listing each so accepted-neighborhood selection isn't empty", () => {
+    const pacListings = LISTINGS.filter((l) => l.neighborhoodId === "pacific-heights");
+    const rhListings = LISTINGS.filter((l) => l.neighborhoodId === "russian-hill");
+    expect(pacListings.length).toBeGreaterThan(0);
+    expect(rhListings.length).toBeGreaterThan(0);
+  });
+
+  it("filtering by accepted set including Pacific Heights and Russian Hill returns those listings", () => {
+    const accepted = new Set(["pacific-heights", "russian-hill"]);
+    const out = LISTINGS.filter((l) => accepted.has(l.neighborhoodId));
+    expect(out.some((l) => l.neighborhoodId === "pacific-heights")).toBe(true);
+    expect(out.some((l) => l.neighborhoodId === "russian-hill")).toBe(true);
+    out.forEach((l) => expect(accepted.has(l.neighborhoodId)).toBe(true));
+  });
+});
+
+describe("greenspaces lifestyle option", () => {
+  it("uses the user-visible label \"Hang in Greenspaces\"", () => {
+    expect(LIFESTYLE_LABELS.greenspaces).toBe("Hang in Greenspaces");
+  });
+
+  it("scores park-rich neighborhoods higher when greenspaces is selected", () => {
+    const sunset = findNeighborhood("outer-sunset")!;
+    const soma = findNeighborhood("soma")!;
+    const a = answers({ lifestyle: ["greenspaces"] });
+    const sunsetLifestyle = scoreNeighborhoodForDiscovery(sunset, a).components.lifestyle;
+    const somaLifestyle = scoreNeighborhoodForDiscovery(soma, a).components.lifestyle;
+    expect(sunsetLifestyle).toBeGreaterThan(somaLifestyle);
+  });
+
+  it("the default discovery answers include greenspaces (not the legacy 'parks' id)", () => {
+    expect(DEFAULT_DISCOVERY_ANSWERS.lifestyle).toContain("greenspaces");
+    expect(DEFAULT_DISCOVERY_ANSWERS.lifestyle as string[]).not.toContain("parks");
   });
 });
 

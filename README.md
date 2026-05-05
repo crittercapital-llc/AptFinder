@@ -4,10 +4,17 @@
 
 **Live demo:** <https://aptfinder-homehound.vercel.app>
 
-HomeHound scrapes (or, in this MVP, mocks) listings, scores them against what
-matters to you — safety, commute, food, vibe, affordability, amenities, and
-landlord responsiveness — and drafts the first-touch outreach so you can stop
-refreshing tabs at 11pm.
+HomeHound scores listings against what matters to you — safety, commute, food,
+vibe, affordability, amenities, and landlord responsiveness — and drafts the
+first-touch outreach so you can stop refreshing tabs at 11pm.
+
+> **Data source today:** all listings and neighborhoods are **local mock data**
+> hand-authored in `src/lib/data/`. HomeHound **does not currently pull from
+> Zillow**, RentSpree, Apartments.com, or any other live listing source. There
+> is no Zillow API integration, scraper, or runtime fetch in this repo. The
+> domain types in `src/lib/types.ts` are designed so a real adapter can replace
+> the mock arrays without touching the scoring engine or UI — see
+> [_Replacing mock data_](#replacing-mock-data).
 
 This repository is a Next.js + TypeScript + Tailwind MVP built around a clean
 domain model so future scraping or API integrations can replace mock data
@@ -156,7 +163,8 @@ To wire in real listings or neighborhoods:
 
 - Persistence: Prisma schema for `SearchCriteria`, `Listing`, `Neighborhood`,
   `ScoredOutput`, `OutreachAction` — current types map 1:1.
-- Real scrapers / RentSpree / Zillow API adapter feeding `LISTINGS`.
+- Real scrapers / RentSpree / Zillow API adapter feeding `LISTINGS` (none today
+  — the app is mock-only).
 - Crime, walkability, and POI density data feeding `Neighborhood.scores`.
 - A map view alongside the neighborhood ranking.
 - Authenticated outreach delivery (with explicit per-send confirmation).

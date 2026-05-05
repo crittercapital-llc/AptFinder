@@ -29,7 +29,7 @@ const STEPS = [
 
 const COMMUTE_MODE_ORDER: DiscoveryCommuteMode[] = ["rail", "bus", "drive", "bike", "walk"];
 const LIFESTYLE_ORDER: LifestyleInterest[] = [
-  "parks",
+  "greenspaces",
   "restaurants",
   "nightlife",
   "cafes",

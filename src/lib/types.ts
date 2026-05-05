@@ -186,7 +186,7 @@ export type DiscoveryCommuteMode = "rail" | "bus" | "drive" | "bike" | "walk";
 export type NoisePreference = "quiet" | "balanced" | "lively";
 
 export type LifestyleInterest =
-  | "parks"
+  | "greenspaces"
   | "restaurants"
   | "nightlife"
   | "cafes"
