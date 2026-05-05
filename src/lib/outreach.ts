@@ -10,44 +10,78 @@ export function generateOutreach(
 ): { subject: string; body: string } {
   const tone = criteria.outreach.tone;
   const sig = criteria.outreach.introLine.trim() || "— a HomeHound user";
+  const aboutMe = criteria.outreach.aboutMe?.trim() || "";
+
+  const firstName = listing.contact.landlordName.split(" ")[0];
 
   const subject =
     tone === "formal"
       ? `Inquiry: ${listing.title} availability`
       : tone === "concise"
         ? `Quick question on ${listing.address.split(",")[0]}`
-        : `Hi from a HomeHound looking at ${listing.address.split(",")[0]}`;
+        : tone === "enthusiastic"
+          ? `Love the look of ${listing.address.split(",")[0]}!`
+          : `Hi from a HomeHound looking at ${listing.address.split(",")[0]}`;
 
   const opener =
     tone === "formal"
       ? `Dear ${listing.contact.landlordName},`
       : tone === "concise"
-        ? `Hi ${listing.contact.landlordName.split(" ")[0]},`
-        : `Hi ${listing.contact.landlordName.split(" ")[0]} — hope your week's going well.`;
+        ? `Hi ${firstName},`
+        : tone === "casual"
+          ? `Hey ${firstName}!`
+          : tone === "enthusiastic"
+            ? `Hi ${firstName} — I'm so excited to reach out about this listing!`
+            : `Hi ${firstName} — hope your week's going well.`;
+
+  const intro =
+    tone === "formal"
+      ? `I'm writing to inquire about ${listing.title} at ${listing.address}.`
+      : tone === "enthusiastic"
+        ? `I just came across ${listing.title} (${listing.address}) and it immediately jumped out as exactly what I've been searching for!`
+        : tone === "casual"
+          ? `Saw ${listing.title} at ${listing.address} and it looks like a great fit.`
+          : `I came across ${listing.title} (${listing.address}) and it lines up with what I'm looking for.`;
 
   const moveIn = new Date(criteria.moveInBy).toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
   });
 
+  const situationLine = `${tone === "casual" || tone === "enthusiastic" ? "Quick background: " : "A bit about my situation: "}${bedroomPhrase(criteria.bedrooms)}, budget around $${criteria.budgetMax.toLocaleString()}/mo, hoping to move in by ${moveIn}.`;
+
+  const commuteLine = criteria.commute.destination
+    ? `I'd be commuting to ${criteria.commute.destination} (${criteria.commute.mode}), so the location is a real fit.`
+    : "";
+
+  const aboutMeLine = aboutMe
+    ? tone === "formal"
+      ? `About me: ${aboutMe}`
+      : `A little about me: ${aboutMe}`
+    : "";
+
+  const closing =
+    tone === "formal"
+      ? "Thank you for your time."
+      : tone === "enthusiastic"
+        ? "Thanks so much — really hoping to connect soon!"
+        : "Thanks so much!";
+
   const body = [
     opener,
     "",
-    tone === "formal"
-      ? `I'm writing to inquire about ${listing.title} at ${listing.address}.`
-      : `I came across ${listing.title} (${listing.address}) and it lines up with what I'm looking for.`,
+    intro,
     "",
-    `A bit about my situation: ${bedroomPhrase(criteria.bedrooms)}, budget around $${criteria.budgetMax.toLocaleString()}/mo, hoping to move in by ${moveIn}.`,
-    criteria.commute.destination
-      ? `I'd be commuting to ${criteria.commute.destination} (${criteria.commute.mode}), so the location is a real fit.`
-      : "",
+    situationLine,
+    commuteLine,
+    aboutMeLine,
     "",
     "Could you let me know:",
     "  • Is the unit still available?",
     "  • Are tours possible this week or next?",
     "  • Anything I should know about the application or building?",
     "",
-    tone === "formal" ? "Thank you for your time." : "Thanks so much!",
+    closing,
     "",
     sig,
   ]
