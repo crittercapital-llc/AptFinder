@@ -22,6 +22,7 @@ import { generateOutreach, newOutreachAction } from "@/lib/outreach";
 import { rankNeighborhoods } from "@/lib/scoring";
 import type {
   DiscoveryAnswers,
+  Listing,
   OutreachAction,
   SearchCriteria,
 } from "@/lib/types";
@@ -44,6 +45,33 @@ export default function HomePage() {
   const [outreach, setOutreach] = useState<Record<string, OutreachAction>>({});
   const [shortlistOnly, setShortlistOnly] = useState(false);
 
+  // Live listings from Rentcast — falls back to mock data when the API key
+  // isn't configured or the request fails.
+  const [listings, setListings] = useState<Listing[]>(LISTINGS);
+  const [listingsSource, setListingsSource] = useState<"mock" | "live" | "loading">("mock");
+
+  useEffect(() => {
+    setListingsSource("loading");
+    const city = encodeURIComponent(criteria.city);
+    fetch(`/api/listings?city=${city}&state=CA`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        return res.json() as Promise<Listing[]>;
+      })
+      .then((data) => {
+        if (data.length > 0) {
+          setListings(data);
+          setListingsSource("live");
+        } else {
+          setListingsSource("mock");
+        }
+      })
+      .catch(() => {
+        setListings(LISTINGS);
+        setListingsSource("mock");
+      });
+  }, [criteria.city]);
+
   const recommendations = useMemo(
     () => rankNeighborhoodsForDiscovery(NEIGHBORHOODS, discoveryAnswers),
     [discoveryAnswers],
@@ -51,9 +79,9 @@ export default function HomePage() {
 
   // Listings restricted to neighborhoods the user accepted in discovery.
   const acceptedListings = useMemo(() => {
-    if (acceptedNeighborhoods.size === 0) return LISTINGS;
-    return LISTINGS.filter((l) => acceptedNeighborhoods.has(l.neighborhoodId));
-  }, [acceptedNeighborhoods]);
+    if (acceptedNeighborhoods.size === 0) return listings;
+    return listings.filter((l) => acceptedNeighborhoods.has(l.neighborhoodId));
+  }, [acceptedNeighborhoods, listings]);
 
   // Neighborhoods restricted to the accepted set so the listing-side ranking
   // doesn't surface places the user already declined.
@@ -69,8 +97,8 @@ export default function HomePage() {
   }, [acceptedListings, acceptedNeighborhoodObjs, criteria, passed, shortlist, shortlistOnly]);
 
   const listingsById = useMemo(
-    () => Object.fromEntries(LISTINGS.map((l) => [l.id, l])),
-    [],
+    () => Object.fromEntries(listings.map((l) => [l.id, l])),
+    [listings],
   );
 
   const totalMatches = useMemo(
@@ -250,7 +278,7 @@ export default function HomePage() {
   return (
     <main className="min-h-screen">
       <Header shortlistCount={shortlist.size} />
-      <Hero neighborhoodCount={NEIGHBORHOODS.length} listingCount={LISTINGS.length} />
+      <Hero neighborhoodCount={NEIGHBORHOODS.length} listingCount={listings.length} />
 
       <div className="mx-auto max-w-7xl px-6 pb-24">
         {phase === "discovery" && (
@@ -388,13 +416,17 @@ export default function HomePage() {
         <footer className="mt-16 border-t border-ink-100 pt-8 text-sm text-ink-500">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div data-testid="footer-data-source">
-              HomeHound MVP · listings &amp; neighborhoods are <strong>local mock data</strong>{" "}
-              — this app does <strong>not</strong> pull from Zillow or any other
-              live listing source. Swap in real scrapers via{" "}
-              <code className="rounded bg-ink-100 px-1.5 py-0.5 font-mono text-xs">
-                src/lib/data
-              </code>
-              .
+              {listingsSource === "live" ? (
+                <>HomeHound · listings sourced live from <strong>Rentcast</strong>.</>
+              ) : listingsSource === "loading" ? (
+                <>HomeHound · fetching live listings…</>
+              ) : (
+                <>
+                  HomeHound MVP · listings are <strong>local mock data</strong>{" "}
+                  — add a <code className="rounded bg-ink-100 px-1.5 py-0.5 font-mono text-xs">RENTCAST_API_KEY</code> to{" "}
+                  <code className="rounded bg-ink-100 px-1.5 py-0.5 font-mono text-xs">.env.local</code> to enable live listings.
+                </>
+              )}
             </div>
             <div className="text-xs text-ink-400">
               Built as a neighborhood-first agent, not a listing grid.
