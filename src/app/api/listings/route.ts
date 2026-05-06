@@ -17,6 +17,7 @@ export async function GET(request: Request) {
   const city = searchParams.get("city") || "San Francisco";
   const state = searchParams.get("state") || "CA";
   const limit = Math.min(Number(searchParams.get("limit") || "100"), 500);
+  const debug = searchParams.get("debug") === "1";
 
   const url = new URL(`${RENTCAST_BASE}/listings/rental/long-term`);
   url.searchParams.set("city", city);
@@ -24,13 +25,10 @@ export async function GET(request: Request) {
   url.searchParams.set("limit", String(limit));
   url.searchParams.set("status", "Active");
 
-  let rentcastData: RentcastListing[];
+  let raw: unknown;
   try {
     const res = await fetch(url.toString(), {
       headers: { "X-Api-Key": apiKey, Accept: "application/json" },
-      // Next.js data cache: revalidate every 30 minutes.
-      // On Vercel this persists across serverless invocations, keeping
-      // Rentcast API usage well within free-tier limits.
       next: { revalidate: 1800 },
     });
 
@@ -38,22 +36,39 @@ export async function GET(request: Request) {
       const body = await res.text();
       console.error("Rentcast error", res.status, body);
       return NextResponse.json(
-        { error: `Rentcast returned ${res.status}` },
+        { error: `Rentcast returned ${res.status}`, body },
         { status: res.status },
       );
     }
 
-    rentcastData = await res.json();
+    raw = await res.json();
   } catch (err) {
     console.error("Rentcast fetch failed", err);
-    return NextResponse.json({ error: "Failed to reach Rentcast." }, { status: 502 });
+    return NextResponse.json({ error: "Failed to reach Rentcast.", detail: String(err) }, { status: 502 });
   }
 
-  const listings = rentcastData.map(mapRentcastListing);
+  // Return the raw response when debugging so you can see the exact shape.
+  if (debug) {
+    return NextResponse.json({ raw, type: typeof raw, isArray: Array.isArray(raw) });
+  }
+
+  // Rentcast may return a top-level array or wrap listings in an object.
+  const items: RentcastListing[] = Array.isArray(raw)
+    ? raw
+    : Array.isArray((raw as Record<string, unknown>)?.listings)
+      ? ((raw as Record<string, unknown>).listings as RentcastListing[])
+      : Array.isArray((raw as Record<string, unknown>)?.data)
+        ? ((raw as Record<string, unknown>).data as RentcastListing[])
+        : [];
+
+  if (items.length === 0) {
+    console.warn("Rentcast returned no listings. Raw shape:", JSON.stringify(raw)?.slice(0, 300));
+  }
+
+  const listings = items.map(mapRentcastListing);
 
   return NextResponse.json(listings, {
     headers: {
-      // Tell the browser (and Vercel's edge) to treat this as fresh for 30 min.
       "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=300",
     },
   });
