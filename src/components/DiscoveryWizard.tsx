@@ -28,8 +28,11 @@ interface Props {
   onSubmit: (answers: DiscoveryAnswers, profile: ProfileFields) => void;
 }
 
-const STEPS = [
-  { id: "about", label: "About you" },
+// Phase 0 = "About you" (single step).
+// Phase 1 = "Neighborhood finder" (4 steps indexed 0–3).
+type Phase = 0 | 1;
+
+const NEIGHBORHOOD_STEPS = [
   { id: "commute", label: "Commute" },
   { id: "lifestyle", label: "Lifestyle" },
   { id: "life", label: "Life situation" },
@@ -54,7 +57,8 @@ const BUILDING_STYLE_ORDER: BuildingStyle[] = [
 ];
 
 export function DiscoveryWizard({ initial, initialProfile, onSubmit }: Props) {
-  const [stepIndex, setStepIndex] = useState(0);
+  const [phase, setPhase] = useState<Phase>(0);
+  const [neighborhoodStep, setNeighborhoodStep] = useState(0);
   const [answers, setAnswers] = useState<DiscoveryAnswers>(initial);
   const [profile, setProfile] = useState<ProfileFields>(initialProfile);
 
@@ -93,23 +97,88 @@ export function DiscoveryWizard({ initial, initialProfile, onSubmit }: Props) {
     );
   }
 
-  const isLast = stepIndex === STEPS.length - 1;
-  const stepValid = isStepValid(stepIndex, answers, profile);
+  // ── Phase 0: About you ──────────────────────────────────────────────────────
 
-  function next() {
-    if (!stepValid) return;
-    if (isLast) {
+  const aboutValid = isAboutValid(profile);
+
+  function startNeighborhoodFinder() {
+    if (!aboutValid) return;
+    setPhase(1);
+    setNeighborhoodStep(0);
+  }
+
+  // ── Phase 1: Neighborhood finder ────────────────────────────────────────────
+
+  const isLastNeighborhoodStep = neighborhoodStep === NEIGHBORHOOD_STEPS.length - 1;
+  const neighborhoodStepValid = isNeighborhoodStepValid(neighborhoodStep, answers);
+
+  function nextNeighborhoodStep() {
+    if (!neighborhoodStepValid) return;
+    if (isLastNeighborhoodStep) {
       onSubmit(answers, profile);
       return;
     }
-    setStepIndex((i) => i + 1);
+    setNeighborhoodStep((i) => i + 1);
   }
 
-  function back() {
-    if (stepIndex === 0) return;
-    setStepIndex((i) => i - 1);
+  function backNeighborhoodStep() {
+    if (neighborhoodStep === 0) {
+      setPhase(0);
+    } else {
+      setNeighborhoodStep((i) => i - 1);
+    }
   }
 
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  if (phase === 0) {
+    return (
+      <section
+        id="discovery"
+        className="card p-6 md:p-8"
+        data-testid="discovery-wizard"
+      >
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <div>
+            <div className="section-eyebrow">Step 1 of 2</div>
+            <h2 className="font-display text-2xl font-semibold text-ink-900">
+              First, a little about you.
+            </h2>
+            <p className="mt-1 max-w-xl text-sm text-ink-600">
+              This helps HomeHound write personalised outreach and surface listings that
+              genuinely match your budget and situation.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-7">
+          <AboutStep profile={profile} patchProfile={patchProfile} />
+        </div>
+
+        <div className="mt-8 flex items-center justify-end border-t border-ink-100 pt-5">
+          <div className="flex items-center gap-3">
+            {!aboutValid && (
+              <span className="text-xs text-clay-700" role="alert" data-testid="discovery-step-error">
+                {aboutValidationMessage(profile)}
+              </span>
+            )}
+            <button
+              type="button"
+              className="btn"
+              onClick={startNeighborhoodFinder}
+              disabled={!aboutValid}
+              data-testid="discovery-next"
+            >
+              Find my neighborhood →
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // Phase 1
+  const currentStep = NEIGHBORHOOD_STEPS[neighborhoodStep];
   return (
     <section
       id="discovery"
@@ -118,28 +187,29 @@ export function DiscoveryWizard({ initial, initialProfile, onSubmit }: Props) {
     >
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <div className="section-eyebrow">Neighborhood discovery</div>
+          <div className="section-eyebrow">Step 2 of 2 · Neighborhood finder</div>
           <h2 className="font-display text-2xl font-semibold text-ink-900">
-            Let&apos;s find the right neighborhoods first.
+            Now let&apos;s find the right neighborhoods.
           </h2>
           <p className="mt-1 max-w-xl text-sm text-ink-600">
             A few quick questions about your day-to-day. We&apos;ll recommend
-            neighborhoods that fit before showing you any apartments.
+            neighborhoods before showing you any apartments.
           </p>
         </div>
         <div className="text-xs text-ink-500" data-testid="discovery-step-indicator">
-          Step {stepIndex + 1} of {STEPS.length} ·{" "}
-          <span className="text-ink-700">{STEPS[stepIndex].label}</span>
+          {neighborhoodStep + 1} of {NEIGHBORHOOD_STEPS.length} ·{" "}
+          <span className="text-ink-700">{currentStep.label}</span>
         </div>
       </div>
 
       <ol
         className="mt-5 grid grid-cols-4 gap-2 text-xs"
         data-testid="discovery-progress"
-        aria-label="Progress"
+        aria-label="Neighborhood finder progress"
       >
-        {STEPS.map((s, i) => {
-          const state = i < stepIndex ? "done" : i === stepIndex ? "active" : "pending";
+        {NEIGHBORHOOD_STEPS.map((s, i) => {
+          const state =
+            i < neighborhoodStep ? "done" : i === neighborhoodStep ? "active" : "pending";
           return (
             <li key={s.id} className="flex flex-col gap-1">
               <div
@@ -153,11 +223,7 @@ export function DiscoveryWizard({ initial, initialProfile, onSubmit }: Props) {
                 }
                 data-testid={`discovery-progress-${s.id}-${state}`}
               />
-              <span
-                className={
-                  state === "pending" ? "text-ink-400" : "font-medium text-ink-700"
-                }
-              >
+              <span className={state === "pending" ? "text-ink-400" : "font-medium text-ink-700"}>
                 {s.label}
               </span>
             </li>
@@ -166,25 +232,14 @@ export function DiscoveryWizard({ initial, initialProfile, onSubmit }: Props) {
       </ol>
 
       <div className="mt-7">
-        {stepIndex === 0 && (
-          <AboutStep profile={profile} patchProfile={patchProfile} />
+        {neighborhoodStep === 0 && (
+          <CommuteStep answers={answers} patch={patch} toggleMode={toggleMode} />
         )}
-        {stepIndex === 1 && (
-          <CommuteStep
-            answers={answers}
-            patch={patch}
-            toggleMode={toggleMode}
-          />
+        {neighborhoodStep === 1 && (
+          <LifestyleStep answers={answers} patch={patch} toggleLifestyle={toggleLifestyle} />
         )}
-        {stepIndex === 2 && (
-          <LifestyleStep
-            answers={answers}
-            patch={patch}
-            toggleLifestyle={toggleLifestyle}
-          />
-        )}
-        {stepIndex === 3 && <LifeStep answers={answers} patch={patch} />}
-        {stepIndex === 4 && (
+        {neighborhoodStep === 2 && <LifeStep answers={answers} patch={patch} />}
+        {neighborhoodStep === 3 && (
           <HousingStep answers={answers} toggleStyle={toggleStyle} />
         )}
       </div>
@@ -193,30 +248,25 @@ export function DiscoveryWizard({ initial, initialProfile, onSubmit }: Props) {
         <button
           type="button"
           className="btn-ghost"
-          onClick={back}
-          disabled={stepIndex === 0}
+          onClick={backNeighborhoodStep}
           data-testid="discovery-back"
         >
           ← Back
         </button>
         <div className="flex items-center gap-2">
-          {!stepValid && (
-            <span
-              className="text-xs text-clay-700"
-              data-testid="discovery-step-error"
-              role="alert"
-            >
-              {stepValidationMessage(stepIndex, answers, profile)}
+          {!neighborhoodStepValid && (
+            <span className="text-xs text-clay-700" role="alert" data-testid="discovery-step-error">
+              {neighborhoodStepValidationMessage(neighborhoodStep, answers)}
             </span>
           )}
           <button
             type="button"
             className="btn"
-            onClick={next}
-            disabled={!stepValid}
-            data-testid={isLast ? "discovery-submit" : "discovery-next"}
+            onClick={nextNeighborhoodStep}
+            disabled={!neighborhoodStepValid}
+            data-testid={isLastNeighborhoodStep ? "discovery-submit" : "discovery-next"}
           >
-            {isLast ? "See recommended neighborhoods" : "Next"}
+            {isLastNeighborhoodStep ? "See recommended neighborhoods" : "Next"}
           </button>
         </div>
       </div>
@@ -224,13 +274,23 @@ export function DiscoveryWizard({ initial, initialProfile, onSubmit }: Props) {
   );
 }
 
-function isStepValid(step: number, a: DiscoveryAnswers, p: ProfileFields): boolean {
+// ── Validation ──────────────────────────────────────────────────────────────
+
+function isAboutValid(p: ProfileFields): boolean {
+  const maxOk = Number.isFinite(p.budgetMax) && p.budgetMax > 0;
+  const minOk = !Number.isFinite(p.budgetMin) || p.budgetMin <= p.budgetMax;
+  return maxOk && minOk;
+}
+
+function aboutValidationMessage(p: ProfileFields): string {
+  if (!Number.isFinite(p.budgetMax) || p.budgetMax <= 0) return "Enter a maximum monthly budget.";
+  if (Number.isFinite(p.budgetMin) && p.budgetMin > p.budgetMax)
+    return "Minimum budget can't exceed the maximum.";
+  return "";
+}
+
+function isNeighborhoodStepValid(step: number, a: DiscoveryAnswers): boolean {
   if (step === 0) {
-    const maxOk = Number.isFinite(p.budgetMax) && p.budgetMax > 0;
-    const minOk = !Number.isFinite(p.budgetMin) || p.budgetMin <= p.budgetMax;
-    return maxOk && minOk;
-  }
-  if (step === 1) {
     return (
       !!a.commuteDestination &&
       Number.isFinite(a.commuteMaxMinutes) &&
@@ -238,30 +298,26 @@ function isStepValid(step: number, a: DiscoveryAnswers, p: ProfileFields): boole
       a.commuteModes.length > 0
     );
   }
-  if (step === 3) {
+  if (step === 2) {
     return Number.isFinite(a.yearsPlanned) && a.yearsPlanned >= 1;
   }
   return true;
 }
 
-function stepValidationMessage(step: number, a: DiscoveryAnswers, p: ProfileFields): string {
+function neighborhoodStepValidationMessage(step: number, a: DiscoveryAnswers): string {
   if (step === 0) {
-    if (!Number.isFinite(p.budgetMax) || p.budgetMax <= 0) return "Enter a maximum monthly budget.";
-    if (Number.isFinite(p.budgetMin) && p.budgetMin > p.budgetMax) return "Minimum budget can't exceed the maximum.";
-  }
-  if (step === 1) {
     if (a.commuteModes.length === 0) return "Pick at least one commute method.";
-    if (!Number.isFinite(a.commuteMaxMinutes) || a.commuteMaxMinutes < 5) {
+    if (!Number.isFinite(a.commuteMaxMinutes) || a.commuteMaxMinutes < 5)
       return "Set a commute time of at least 5 minutes.";
-    }
   }
-  if (step === 3) {
-    if (!Number.isFinite(a.yearsPlanned) || a.yearsPlanned < 1) {
+  if (step === 2) {
+    if (!Number.isFinite(a.yearsPlanned) || a.yearsPlanned < 1)
       return "Tell us how many years you plan to stay (≥1).";
-    }
   }
   return "";
 }
+
+// ── Step components ──────────────────────────────────────────────────────────
 
 function AboutStep({
   profile,
@@ -449,9 +505,7 @@ function CommuteStep({
       </div>
 
       <fieldset>
-        <legend className="field-label">
-          Which commute methods are you open to?
-        </legend>
+        <legend className="field-label">Which commute methods are you open to?</legend>
         <p className="mt-1 text-xs text-ink-500">
           Toggle off anything you&apos;d rather not rely on (e.g. buses).
         </p>
