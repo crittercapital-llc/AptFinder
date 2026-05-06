@@ -15,12 +15,21 @@ import type {
   NoisePreference,
 } from "@/lib/types";
 
+export interface ProfileFields {
+  aboutMe: string;
+  budgetMin: number;
+  budgetMax: number;
+  bedrooms: number;
+}
+
 interface Props {
   initial: DiscoveryAnswers;
-  onSubmit: (answers: DiscoveryAnswers) => void;
+  initialProfile: ProfileFields;
+  onSubmit: (answers: DiscoveryAnswers, profile: ProfileFields) => void;
 }
 
 const STEPS = [
+  { id: "about", label: "About you" },
   { id: "commute", label: "Commute" },
   { id: "lifestyle", label: "Lifestyle" },
   { id: "life", label: "Life situation" },
@@ -44,9 +53,14 @@ const BUILDING_STYLE_ORDER: BuildingStyle[] = [
   "boutique_victorian",
 ];
 
-export function DiscoveryWizard({ initial, onSubmit }: Props) {
+export function DiscoveryWizard({ initial, initialProfile, onSubmit }: Props) {
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState<DiscoveryAnswers>(initial);
+  const [profile, setProfile] = useState<ProfileFields>(initialProfile);
+
+  function patchProfile<K extends keyof ProfileFields>(k: K, v: ProfileFields[K]) {
+    setProfile((p) => ({ ...p, [k]: v }));
+  }
 
   function patch<K extends keyof DiscoveryAnswers>(k: K, v: DiscoveryAnswers[K]) {
     setAnswers((a) => ({ ...a, [k]: v }));
@@ -80,12 +94,12 @@ export function DiscoveryWizard({ initial, onSubmit }: Props) {
   }
 
   const isLast = stepIndex === STEPS.length - 1;
-  const stepValid = isStepValid(stepIndex, answers);
+  const stepValid = isStepValid(stepIndex, answers, profile);
 
   function next() {
     if (!stepValid) return;
     if (isLast) {
-      onSubmit(answers);
+      onSubmit(answers, profile);
       return;
     }
     setStepIndex((i) => i + 1);
@@ -153,21 +167,24 @@ export function DiscoveryWizard({ initial, onSubmit }: Props) {
 
       <div className="mt-7">
         {stepIndex === 0 && (
+          <AboutStep profile={profile} patchProfile={patchProfile} />
+        )}
+        {stepIndex === 1 && (
           <CommuteStep
             answers={answers}
             patch={patch}
             toggleMode={toggleMode}
           />
         )}
-        {stepIndex === 1 && (
+        {stepIndex === 2 && (
           <LifestyleStep
             answers={answers}
             patch={patch}
             toggleLifestyle={toggleLifestyle}
           />
         )}
-        {stepIndex === 2 && <LifeStep answers={answers} patch={patch} />}
-        {stepIndex === 3 && (
+        {stepIndex === 3 && <LifeStep answers={answers} patch={patch} />}
+        {stepIndex === 4 && (
           <HousingStep answers={answers} toggleStyle={toggleStyle} />
         )}
       </div>
@@ -189,7 +206,7 @@ export function DiscoveryWizard({ initial, onSubmit }: Props) {
               data-testid="discovery-step-error"
               role="alert"
             >
-              {stepValidationMessage(stepIndex, answers)}
+              {stepValidationMessage(stepIndex, answers, profile)}
             </span>
           )}
           <button
@@ -207,8 +224,13 @@ export function DiscoveryWizard({ initial, onSubmit }: Props) {
   );
 }
 
-function isStepValid(step: number, a: DiscoveryAnswers): boolean {
+function isStepValid(step: number, a: DiscoveryAnswers, p: ProfileFields): boolean {
   if (step === 0) {
+    const maxOk = Number.isFinite(p.budgetMax) && p.budgetMax > 0;
+    const minOk = !Number.isFinite(p.budgetMin) || p.budgetMin <= p.budgetMax;
+    return maxOk && minOk;
+  }
+  if (step === 1) {
     return (
       !!a.commuteDestination &&
       Number.isFinite(a.commuteMaxMinutes) &&
@@ -216,25 +238,158 @@ function isStepValid(step: number, a: DiscoveryAnswers): boolean {
       a.commuteModes.length > 0
     );
   }
-  if (step === 2) {
+  if (step === 3) {
     return Number.isFinite(a.yearsPlanned) && a.yearsPlanned >= 1;
   }
   return true;
 }
 
-function stepValidationMessage(step: number, a: DiscoveryAnswers): string {
+function stepValidationMessage(step: number, a: DiscoveryAnswers, p: ProfileFields): string {
   if (step === 0) {
+    if (!Number.isFinite(p.budgetMax) || p.budgetMax <= 0) return "Enter a maximum monthly budget.";
+    if (Number.isFinite(p.budgetMin) && p.budgetMin > p.budgetMax) return "Minimum budget can't exceed the maximum.";
+  }
+  if (step === 1) {
     if (a.commuteModes.length === 0) return "Pick at least one commute method.";
     if (!Number.isFinite(a.commuteMaxMinutes) || a.commuteMaxMinutes < 5) {
       return "Set a commute time of at least 5 minutes.";
     }
   }
-  if (step === 2) {
+  if (step === 3) {
     if (!Number.isFinite(a.yearsPlanned) || a.yearsPlanned < 1) {
       return "Tell us how many years you plan to stay (≥1).";
     }
   }
   return "";
+}
+
+function AboutStep({
+  profile,
+  patchProfile,
+}: {
+  profile: ProfileFields;
+  patchProfile: <K extends keyof ProfileFields>(k: K, v: ProfileFields[K]) => void;
+}) {
+  const budgetError =
+    Number.isFinite(profile.budgetMin) &&
+    Number.isFinite(profile.budgetMax) &&
+    profile.budgetMin > profile.budgetMax
+      ? "Min can't exceed max."
+      : null;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <label className="field-label" htmlFor="profile-about">
+          A little about you
+        </label>
+        <p className="mt-1 text-xs text-ink-500">
+          HomeHound uses this to write personalised outreach on your behalf. Keep it to
+          2–3 sentences — occupation, lifestyle, pet, whatever helps you stand out.
+        </p>
+        <textarea
+          id="profile-about"
+          className="input mt-2 min-h-[90px] resize-y"
+          data-testid="profile-about"
+          rows={3}
+          placeholder="e.g. Software engineer relocating from Seattle. I keep a tidy space, work from home a few days a week, and have a small, well-behaved dog."
+          value={profile.aboutMe}
+          onChange={(e) => patchProfile("aboutMe", e.target.value)}
+        />
+      </div>
+
+      <div>
+        <div className="field-label">Monthly budget</div>
+        <div className="mt-2 flex items-center gap-3">
+          <BudgetInput
+            value={profile.budgetMin}
+            onChange={(v) => patchProfile("budgetMin", v)}
+            ariaLabel="Minimum monthly rent"
+            testId="profile-budget-min"
+            placeholder="Min"
+            invalid={!!budgetError}
+          />
+          <span className="text-ink-400">to</span>
+          <BudgetInput
+            value={profile.budgetMax}
+            onChange={(v) => patchProfile("budgetMax", v)}
+            ariaLabel="Maximum monthly rent"
+            testId="profile-budget-max"
+            placeholder="Max"
+            invalid={!!budgetError}
+          />
+          <span className="shrink-0 text-sm text-ink-500">/ month</span>
+        </div>
+        {budgetError && (
+          <p className="mt-1 text-xs text-clay-700" role="alert">
+            {budgetError}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <label className="field-label" htmlFor="profile-bedrooms">
+          Bedrooms
+        </label>
+        <select
+          id="profile-bedrooms"
+          className="input mt-2"
+          data-testid="profile-bedrooms"
+          value={profile.bedrooms}
+          onChange={(e) => patchProfile("bedrooms", Number(e.target.value))}
+        >
+          <option value={0}>Studio</option>
+          <option value={1}>1 bedroom</option>
+          <option value={2}>2 bedrooms</option>
+          <option value={3}>3+ bedrooms</option>
+        </select>
+      </div>
+    </div>
+  );
+}
+
+function BudgetInput({
+  value,
+  onChange,
+  ariaLabel,
+  testId,
+  placeholder,
+  invalid,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  ariaLabel: string;
+  testId: string;
+  placeholder: string;
+  invalid?: boolean;
+}) {
+  return (
+    <div className="relative flex-1">
+      <span className="pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-ink-400">
+        $
+      </span>
+      <input
+        type="number"
+        min={0}
+        step={50}
+        aria-label={ariaLabel}
+        aria-invalid={invalid || undefined}
+        data-testid={testId}
+        placeholder={placeholder}
+        className={
+          "input pl-7 " +
+          (invalid ? "border-clay-400 focus:border-clay-500 focus:ring-clay-100" : "")
+        }
+        value={Number.isFinite(value) ? value : ""}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (raw === "") { onChange(NaN); return; }
+          const n = Number(raw);
+          onChange(Number.isFinite(n) ? n : NaN);
+        }}
+      />
+    </div>
+  );
 }
 
 function CommuteStep({
