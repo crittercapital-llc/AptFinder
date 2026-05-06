@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CriteriaForm } from "@/components/CriteriaForm";
+import type { ProfileFields } from "@/components/DiscoveryWizard";
 import { DiscoveryWizard } from "@/components/DiscoveryWizard";
 import { Header } from "@/components/Header";
 import { Hero } from "@/components/Hero";
@@ -120,12 +121,14 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, criteria.outreach.autoDraft, ranked, passed]);
 
-  function handleDiscoverySubmit(answers: DiscoveryAnswers) {
+  function handleDiscoverySubmit(answers: DiscoveryAnswers, profile: ProfileFields) {
     setDiscoveryAnswers(answers);
-    // Sync the listing-side criteria so commute scoring and listing filters
-    // reflect the discovery answers. The user can still tweak in CriteriaForm.
     setCriteria((c) => ({
       ...c,
+      bedrooms: profile.bedrooms,
+      budgetMin: profile.budgetMin,
+      budgetMax: profile.budgetMax,
+      outreach: { ...c.outreach, aboutMe: profile.aboutMe },
       commute: {
         destination: answers.commuteDestination,
         maxMinutes: answers.commuteMaxMinutes,
@@ -254,6 +257,12 @@ export default function HomePage() {
           <div className="mt-2">
             <DiscoveryWizard
               initial={discoveryAnswers}
+              initialProfile={{
+                aboutMe: criteria.outreach.aboutMe,
+                budgetMin: criteria.budgetMin,
+                budgetMax: criteria.budgetMax,
+                bedrooms: criteria.bedrooms,
+              }}
               onSubmit={handleDiscoverySubmit}
             />
           </div>
@@ -370,7 +379,7 @@ export default function HomePage() {
                 onAdvance={advanceOutreach}
                 onRemove={removeOutreach}
                 onRegenerate={regenerateOutreach}
-                tone={criteria.outreach.tone}
+                outreachCriteria={criteria.outreach}
               />
             </section>
           </>
