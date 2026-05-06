@@ -11,7 +11,7 @@ interface Props {
   onAdvance: (listingId: string, status: OutreachAction["status"]) => void;
   onRemove: (listingId: string) => void;
   onRegenerate: (listingId: string) => void;
-  tone: SearchCriteria["outreach"]["tone"];
+  outreachCriteria: SearchCriteria["outreach"];
 }
 
 const ALL_STATUSES: OutreachAction["status"][] = [
@@ -29,7 +29,7 @@ export function OutreachPanel({
   onAdvance,
   onRemove,
   onRegenerate,
-  tone,
+  outreachCriteria,
 }: Props) {
   const items = useMemo(() => Object.values(outreach), [outreach]);
 
@@ -75,7 +75,7 @@ export function OutreachPanel({
               key={o.listingId}
               outreach={o}
               listing={listing}
-              tone={tone}
+              outreachCriteria={outreachCriteria}
               onUpdate={onUpdate}
               onAdvance={onAdvance}
               onRemove={onRemove}
@@ -88,10 +88,14 @@ export function OutreachPanel({
   );
 }
 
+function outreachKey(c: SearchCriteria["outreach"]): string {
+  return `${c.tone}|${c.introLine}|${c.aboutMe ?? ""}`;
+}
+
 function OutreachCard({
   outreach: o,
   listing,
-  tone,
+  outreachCriteria,
   onUpdate,
   onAdvance,
   onRemove,
@@ -99,16 +103,15 @@ function OutreachCard({
 }: {
   outreach: OutreachAction;
   listing: Listing;
-  tone: SearchCriteria["outreach"]["tone"];
+  outreachCriteria: SearchCriteria["outreach"];
   onUpdate: (listingId: string, patch: Partial<OutreachAction>) => void;
   onAdvance: (listingId: string, status: OutreachAction["status"]) => void;
   onRemove: (listingId: string) => void;
   onRegenerate: (listingId: string) => void;
 }) {
-  // Track the tone the draft was last generated for so we can prompt a
-  // regenerate when the user changes tone in the criteria form.
-  const [generatedTone, setGeneratedTone] = useState<SearchCriteria["outreach"]["tone"]>(tone);
-  const toneStale = tone !== generatedTone;
+  const currentKey = outreachKey(outreachCriteria);
+  const [generatedKey, setGeneratedKey] = useState(currentKey);
+  const draftStale = currentKey !== generatedKey;
 
   const [copied, setCopied] = useState<null | "subject" | "body" | "both">(null);
   useEffect(() => {
@@ -147,7 +150,7 @@ function OutreachCard({
 
   function handleRegenerate() {
     onRegenerate(o.listingId);
-    setGeneratedTone(tone);
+    setGeneratedKey(currentKey);
   }
 
   return (
@@ -187,15 +190,14 @@ function OutreachCard({
         </div>
       </div>
 
-      {toneStale && (
+      {draftStale && (
         <div
           className="mt-3 flex flex-wrap items-center gap-3 rounded-md border border-clay-200 bg-clay-50 px-3 py-2 text-sm text-clay-800"
           data-testid={`outreach-tone-stale-${o.listingId}`}
           role="status"
         >
           <span>
-            Tone changed to <strong>{tone}</strong> — this draft was written in{" "}
-            <strong>{generatedTone}</strong>.
+            Your tone or bio has changed — this draft may not reflect your latest settings.
           </span>
           <button
             type="button"

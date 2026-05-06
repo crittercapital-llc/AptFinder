@@ -370,7 +370,7 @@ export default function HomePage() {
                 onAdvance={advanceOutreach}
                 onRemove={removeOutreach}
                 onRegenerate={regenerateOutreach}
-                tone={criteria.outreach.tone}
+                outreachCriteria={criteria.outreach}
               />
             </section>
           </>
